@@ -62,6 +62,12 @@ private:
     return selectSHXADDOp(Root, ShAmt);
   }
 
+  ComplexRendererFns selectSHXADD_UWOp(MachineOperand &Root, unsigned ShAmt) const;
+  template <unsigned ShAmt>
+  ComplexRendererFns selectSHXADD_UWOp(MachineOperand &Root) const {
+    return selectSHXADD_UWOp(Root, ShAmt);
+  }
+
   // Custom renderers for tablegen
   void renderNegImm(MachineInstrBuilder &MIB, const MachineInstr &MI,
                     int OpIdx) const;
@@ -212,6 +218,43 @@ RISCVInstructionSelector::selectSHXADDOp(MachineOperand &Root,
         }}};
       }
     }
+
+  return std::nullopt;
+}
+
+InstructionSelector::ComplexRendererFns
+RISCVInstructionSelector::selectSHXADD_UWOp(MachineOperand &Root,
+                                            unsigned ShAmt) const {
+  using namespace llvm::MIPatternMatch;
+  MachineFunction &MF = *Root.getParent()->getParent()->getParent();
+  MachineRegisterInfo &MRI = MF.getRegInfo();
+
+  if (!Root.isReg())
+    return std::nullopt;
+  Register RootReg = Root.getReg();
+
+  APInt Mask, C2;
+  Register RegX;
+  if (mi_match(RootReg, MRI,
+               m_OneNonDBGUse(m_GAnd(m_OneNonDBGUse(m_GShl(m_Reg(RegX), m_ICst(C2))),
+                                     m_ICst(Mask))))) {
+    Mask &= maskTrailingZeros<uint64_t>(C2.getLimitedValue());
+
+    if (Mask.isShiftedMask()) {
+      unsigned Leading = Mask.countl_zero();
+      unsigned Trailing = Mask.countr_zero();
+      if (Leading == 32 - ShAmt && C2 == Trailing && Trailing > ShAmt) {
+        Register DstReg =
+            MRI.createGenericVirtualRegister(MRI.getType(RootReg));
+        return {{[=](MachineInstrBuilder &MIB) {
+          MachineIRBuilder(*MIB.getInstr())
+              .buildInstr(RISCV::SLLI, {DstReg}, {RegX})
+              .addImm(C2.getLimitedValue() - ShAmt);
+          MIB.addReg(DstReg);
+        }}};
+      }
+    }
+  }
 
   return std::nullopt;
 }

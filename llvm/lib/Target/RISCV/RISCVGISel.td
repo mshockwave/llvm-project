@@ -38,6 +38,13 @@ def gi_sh2add_op : GIComplexOperandMatcher<s32, "selectSHXADDOp<2>">,
 def gi_sh3add_op : GIComplexOperandMatcher<s32, "selectSHXADDOp<3>">,
                    GIComplexPatternEquiv<sh3add_op>;
 
+def gi_sh1add_uw_op : GIComplexOperandMatcher<s32, "selectSHXADD_UWOp<1>">,
+                      GIComplexPatternEquiv<sh1add_uw_op>;
+def gi_sh2add_uw_op : GIComplexOperandMatcher<s32, "selectSHXADD_UWOp<2>">,
+                      GIComplexPatternEquiv<sh2add_uw_op>;
+def gi_sh3add_uw_op : GIComplexOperandMatcher<s32, "selectSHXADD_UWOp<3>">,
+                      GIComplexPatternEquiv<sh3add_uw_op>;
+
 // FIXME: Canonicalize (sub X, C) -> (add X, -C) earlier.
 def : Pat<(XLenVT (sub GPR:$rs1, simm12Plus1:$imm)),
           (ADDI GPR:$rs1, (NegImm simm12Plus1:$imm))>;
