@@ -233,6 +233,9 @@ RISCVInstructionSelector::selectSHXADD_UWOp(MachineOperand &Root,
     return std::nullopt;
   Register RootReg = Root.getReg();
 
+  // Given (and (shl x, c2), mask) in which mask is a shifted mask with
+  // 32 - ShAmt leading zeros and c2 trailing zeros. We can use SLLI by
+  // c2 - ShAmt followed by SHXADD_UW with ShAmt for x amount.
   APInt Mask, C2;
   Register RegX;
   if (mi_match(RootReg, MRI,
