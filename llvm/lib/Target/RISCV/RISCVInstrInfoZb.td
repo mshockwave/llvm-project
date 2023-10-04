@@ -261,12 +261,11 @@ class binop_with_non_imm12<SDPatternOperator binop>
 def add_non_imm12       : binop_with_non_imm12<add>;
 def or_is_add_non_imm12 : binop_with_non_imm12<or_is_add>;
 
-def Shifted32OnesMask : PatLeaf<(imm), [{
-  uint64_t Imm = N->getZExtValue();
-  if (!isShiftedMask_64(Imm))
+def Shifted32OnesMask : IntImmLeaf<XLenVT, [{
+  if (!Imm.isShiftedMask())
     return false;
 
-  unsigned TrailingZeros = llvm::countr_zero(Imm);
+  unsigned TrailingZeros = Imm.countr_zero();
   return TrailingZeros > 0 && TrailingZeros < 32 &&
          Imm == UINT64_C(0xFFFFFFFF) << TrailingZeros;
 }], TrailingZeros>;

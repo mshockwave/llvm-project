@@ -22,6 +22,9 @@ def simm12Plus1 : ImmLeaf<XLenVT, [{
 def GINegImm : GICustomOperandRenderer<"renderNegImm">,
   GISDNodeXFormEquiv<NegImm>;
 
+def GITrailingZeros : GICustomOperandRenderer<"renderTrailingZeros">,
+                      GISDNodeXFormEquiv<TrailingZeros>;
+
 // FIXME: This is labelled as handling 's32', however the ComplexPattern it
 // refers to handles both i32 and i64 based on the HwMode. Currently this LLT
 // parameter appears to be ignored so this pattern works for both, however we
