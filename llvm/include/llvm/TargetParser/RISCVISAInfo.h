@@ -76,6 +76,13 @@ public:
                                             unsigned MinorVersion);
   LLVM_ABI static std::string getTargetFeatureForExtension(StringRef Ext);
 
+  LLVM_ABI static void
+  getSupportedExtensions(RISCVISAUtils::OrderedExtensionMap &Exts,
+                         bool IncludeExperimental = true);
+  LLVM_ABI static void
+  getSupportedProfiles(StringMap<std::unique_ptr<RISCVISAInfo>> &Profiles,
+                       bool IncludeExperimental = true);
+
   LLVM_ABI static void printSupportedExtensions(StringMap<StringRef> &DescMap);
   LLVM_ABI static void
   printEnabledExtensions(bool IsRV64, std::set<StringRef> &EnabledFeatureNames,

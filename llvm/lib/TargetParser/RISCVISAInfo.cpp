@@ -70,6 +70,35 @@ static void verifyTables() {
 #endif
 }
 
+void RISCVISAInfo::getSupportedExtensions(
+    RISCVISAUtils::OrderedExtensionMap &Exts, bool IncludeExperimental) {
+  for (const auto &E : SupportedExtensions)
+    Exts[E.Name] = {E.Version.Major, E.Version.Minor};
+
+  if (IncludeExperimental) {
+    for (const auto &E : SupportedExperimentalExtensions)
+      Exts[E.Name] = {E.Version.Major, E.Version.Minor};
+  }
+}
+
+void RISCVISAInfo::getSupportedProfiles(
+    StringMap<std::unique_ptr<RISCVISAInfo>> &Profiles,
+    bool IncludeExperimental) {
+  auto addProfile = [&](const RISCVProfile &P) {
+    assert(!Profiles.count(P.Name) && "profile is already added");
+    auto Info = cantFail(RISCVISAInfo::parseNormalizedArchString(P.MArch),
+                         "expect a valid MArch string from a profile");
+    Profiles.try_emplace(P.Name, std::move(Info));
+  };
+
+  for (const auto &P : SupportedProfiles)
+    addProfile(P);
+  if (IncludeExperimental) {
+    for (const auto &P : SupportedExperimentalProfiles)
+      addProfile(P);
+  }
+}
+
 static void PrintExtension(StringRef Name, StringRef Version,
                            StringRef Description) {
   outs().indent(4);
