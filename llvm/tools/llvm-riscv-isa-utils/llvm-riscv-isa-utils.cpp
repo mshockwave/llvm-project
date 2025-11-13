@@ -11,12 +11,22 @@
 
 #include "CommandRegistry.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/raw_ostream.h"
 #include <string>
 
 using namespace llvm;
 
+// This is really just a dummy category at this moment to suppress
+// unrelated flags.
+static cl::OptionCategory
+    GenericOptions("Generic llvm-riscv-isa-utils Options");
+
 int main(int argc, char **argv) {
+  InitLLVM X(argc, argv);
+
+  cl::HideUnrelatedOptions(&GenericOptions);
+
   cl::ParseCommandLineOptions(argc, argv, "llvm-riscv-isa-utils");
 
   for (auto *SC : cl::getRegisteredSubcommands()) {
