@@ -26,10 +26,6 @@ using namespace llvm;
 static cl::SubCommand
     ListSubCmd("list", "Show extensions of an arch string or CPU name");
 
-static cl::opt<bool>
-    SupportedExtensions("all", cl::desc("List all supported extensions"),
-                        cl::init(false), cl::sub(ListSubCmd));
-
 static cl::opt<bool> IsRV64("rv64", cl::desc("Is 64-bit RISC-V"),
                             cl::init(false), cl::sub(ListSubCmd));
 
@@ -40,7 +36,8 @@ static cl::opt<std::string> MCpu("mcpu", cl::desc("RISC-V CPU name"),
                                  cl::init(""), cl::sub(ListSubCmd));
 
 static cl::opt<bool>
-    EnableExperimental("experimental", cl::desc("Show experimental extensions"),
+    EnableExperimental("menable-experimental-extensions",
+                       cl::desc("Show experimental extensions"),
                        cl::init(false), cl::sub(ListSubCmd));
 
 static Error entry() {
@@ -55,9 +52,11 @@ static Error entry() {
   // Populate features from -march.
   std::vector<std::string> EnabledFeatures;
   if (!MArch.empty()) {
-    std::unique_ptr<RISCVISAInfo> RVISAInfo =
-        cantFail(RISCVISAInfo::parseArchString(MArch, EnableExperimental));
-    EnabledFeatures = RVISAInfo->toFeatures();
+    auto RVISAInfoOrErr =
+        RISCVISAInfo::parseArchString(MArch, EnableExperimental);
+    if (!RVISAInfoOrErr)
+      return RVISAInfoOrErr.takeError();
+    EnabledFeatures = (*RVISAInfoOrErr)->toFeatures();
   }
 
   std::unique_ptr<MCSubtargetInfo> STI(TheTarget->createMCSubtargetInfo(
@@ -70,7 +69,9 @@ static Error entry() {
   for (const auto &KV : STI->getAllProcessorFeatures())
     AllFeaturesDesc[KV.Key] = KV.Desc;
 
-  if (SupportedExtensions) {
+  if (!MArch.getNumOccurrences() && !MCpu.getNumOccurrences()) {
+    // In the absent of `-march` and `-mcpu`, we simply print out
+    // all supported extensions (and profiles).
     RISCVISAInfo::printSupportedExtensions(AllFeaturesDesc);
     return Error::success();
   }
