@@ -83,10 +83,11 @@ public:
   getSupportedProfiles(StringMap<std::unique_ptr<RISCVISAInfo>> &Profiles,
                        bool IncludeExperimental = true);
 
-  LLVM_ABI static void printSupportedExtensions(StringMap<StringRef> &DescMap);
+  LLVM_ABI static void printSupportedExtensions(StringMap<StringRef> &DescMap,
+                                                bool AsJSON = false);
   LLVM_ABI static void
   printEnabledExtensions(bool IsRV64, std::set<StringRef> &EnabledFeatureNames,
-                         StringMap<StringRef> &DescMap);
+                         StringMap<StringRef> &DescMap, bool AsJSON = false);
 
   /// Return the group id and bit position of __riscv_feature_bits.  Returns
   /// <-1, -1> if not supported.

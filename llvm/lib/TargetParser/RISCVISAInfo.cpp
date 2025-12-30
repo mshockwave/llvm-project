@@ -12,6 +12,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <atomic>
@@ -99,6 +100,81 @@ void RISCVISAInfo::getSupportedProfiles(
   }
 }
 
+static void printJSONExtension(json::OStream &JOS, StringRef ExtName,
+                               const RISCVISAUtils::ExtensionVersion &Version,
+                               StringMap<StringRef> &DescMap,
+                               bool Experimental) {
+  JOS.objectBegin();
+  JOS.attribute("name", ExtName);
+  JOS.attributeObject("version", [&] {
+    JOS.attribute("major", Version.Major);
+    JOS.attribute("minor", Version.Minor);
+  });
+  if (Experimental)
+    JOS.attribute("description",
+                  DescMap[Twine("experimental-" + ExtName).str()]);
+  else
+    JOS.attribute("description", DescMap[ExtName]);
+  JOS.attribute("experimental", Experimental);
+  JOS.objectEnd();
+}
+
+static void printSupportedExtAsJSON(StringMap<StringRef> &DescMap) {
+  json::OStream JOS(outs(), /*IndentSize=*/2);
+  JOS.objectBegin();
+
+  JOS.attributeArray("extensions", [&] {
+    RISCVISAUtils::OrderedExtensionMap ExtMap;
+    for (const auto &E : SupportedExtensions)
+      ExtMap[E.Name] = {E.Version.Major, E.Version.Minor};
+    for (const auto &[Name, Version] : ExtMap)
+      printJSONExtension(JOS, Name, Version, DescMap, /*Experimental=*/false);
+
+    ExtMap.clear();
+    for (const auto &E : SupportedExperimentalExtensions)
+      ExtMap[E.Name] = {E.Version.Major, E.Version.Minor};
+    for (const auto &[Name, Version] : ExtMap)
+      printJSONExtension(JOS, Name, Version, DescMap, /*Experimental=*/true);
+  });
+
+  JOS.attributeArray("profiles", [&] {
+    for (const auto &P : SupportedProfiles)
+      JOS.object([&] {
+        JOS.attribute("name", P.Name);
+        JOS.attribute("experimental", false);
+      });
+    for (const auto &P : SupportedExperimentalProfiles)
+      JOS.object([&] {
+        JOS.attribute("name", P.Name);
+        JOS.attribute("experimental", true);
+      });
+  });
+
+  JOS.objectEnd();
+}
+
+static void printEnabledExtAsJSON(std::set<StringRef> &EnabledFeatureNames,
+                                  StringMap<StringRef> &DescMap) {
+  json::OStream JOS(outs(), /*IndentSize=*/2);
+  JOS.arrayBegin();
+  RISCVISAUtils::OrderedExtensionMap ExtMap;
+  for (const auto &E : SupportedExtensions) {
+    if (EnabledFeatureNames.count(E.Name))
+      ExtMap[E.Name] = {E.Version.Major, E.Version.Minor};
+  }
+  for (const auto &[Name, Version] : ExtMap)
+    printJSONExtension(JOS, Name, Version, DescMap, /*Experimental=*/false);
+
+  ExtMap.clear();
+  for (const auto &E : SupportedExperimentalExtensions) {
+    if (EnabledFeatureNames.count("experimental-" + std::string(E.Name)))
+      ExtMap[E.Name] = {E.Version.Major, E.Version.Minor};
+  }
+  for (const auto &[Name, Version] : ExtMap)
+    printJSONExtension(JOS, Name, Version, DescMap, /*Experimental=*/true);
+  JOS.arrayEnd();
+}
+
 static void PrintExtension(StringRef Name, StringRef Version,
                            StringRef Description) {
   outs().indent(4);
@@ -107,7 +183,11 @@ static void PrintExtension(StringRef Name, StringRef Version,
          << Description << "\n";
 }
 
-void RISCVISAInfo::printSupportedExtensions(StringMap<StringRef> &DescMap) {
+void RISCVISAInfo::printSupportedExtensions(StringMap<StringRef> &DescMap,
+                                            bool AsJSON) {
+  if (AsJSON)
+    return printSupportedExtAsJSON(DescMap);
+
   outs() << "All available -march extensions for RISC-V\n\n";
   PrintExtension("Name", "Version", (DescMap.empty() ? "" : "Description"));
 
@@ -144,7 +224,10 @@ void RISCVISAInfo::printSupportedExtensions(StringMap<StringRef> &DescMap) {
 
 void RISCVISAInfo::printEnabledExtensions(
     bool IsRV64, std::set<StringRef> &EnabledFeatureNames,
-    StringMap<StringRef> &DescMap) {
+    StringMap<StringRef> &DescMap, bool AsJSON) {
+  if (AsJSON)
+    return printEnabledExtAsJSON(EnabledFeatureNames, DescMap);
+
   outs() << "Extensions enabled for the given RISC-V target\n\n";
   PrintExtension("Name", "Version", (DescMap.empty() ? "" : "Description"));
 

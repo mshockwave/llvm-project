@@ -10,6 +10,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "CommandRegistry.h"
+#include "RISCVISAUtils.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/MC/MCSubtargetInfo.h"
@@ -72,7 +73,8 @@ static Error entry() {
   if (!MArch.getNumOccurrences() && !MCpu.getNumOccurrences()) {
     // In the absent of `-march` and `-mcpu`, we simply print out
     // all supported extensions (and profiles).
-    RISCVISAInfo::printSupportedExtensions(AllFeaturesDesc);
+    RISCVISAInfo::printSupportedExtensions(AllFeaturesDesc,
+                                           RISCVISAUtils::shouldPrintAsJSON());
     return Error::success();
   }
 
@@ -80,7 +82,8 @@ static Error entry() {
   for (const auto &Feature : STI->getEnabledProcessorFeatures())
     EnabledFeatureNames.insert(Feature.Key);
   RISCVISAInfo::printEnabledExtensions(IsRV64, EnabledFeatureNames,
-                                       AllFeaturesDesc);
+                                       AllFeaturesDesc,
+                                       RISCVISAUtils::shouldPrintAsJSON());
 
   return Error::success();
 }
