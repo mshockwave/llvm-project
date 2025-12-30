@@ -10,6 +10,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "CommandRegistry.h"
+#include "RISCVISAUtils.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/raw_ostream.h"
@@ -21,6 +22,11 @@ using namespace llvm;
 // unrelated flags.
 static cl::OptionCategory
     GenericOptions("Generic llvm-riscv-isa-utils Options");
+
+static cl::opt<bool> PrintJson("json", cl::desc("Print results as JSON"),
+                               cl::init(false), cl::cat(GenericOptions));
+
+bool llvm::RISCVISAUtils::shouldPrintAsJSON() { return PrintJson; }
 
 int main(int argc, char **argv) {
   InitLLVM X(argc, argv);

@@ -10,11 +10,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "CommandRegistry.h"
+#include "RISCVISAUtils.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/JSON.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/TargetParser/Host.h"
 #include "llvm/TargetParser/RISCVISAInfo.h"
@@ -186,9 +188,88 @@ static Error printDependencyChain(StringRef InputName,
   return Error::success();
 }
 
+namespace {
+struct ExportExtension {
+  StringRef Name;
+  const RISCVISAUtils::ExtensionVersion &Version;
+  StringRef Description;
+  SmallVector<StringRef, 4> ImpliedExtensions;
+
+  raw_ostream &printJSON(raw_ostream &OS) const;
+};
+
+struct ExportProfile {
+  StringRef Name;
+  const RISCVISAUtils::OrderedExtensionMap &Extensions;
+
+  raw_ostream &printJSON(raw_ostream &OS) const;
+};
+} // namespace
+
+raw_ostream &ExportExtension::printJSON(raw_ostream &OS) const {
+  json::OStream JOS(OS, /*IndentSize=*/2);
+  JOS.objectBegin();
+  JOS.attribute("name", Name);
+  JOS.attributeObject("version", [&, this] {
+    JOS.attribute("major", Version.Major);
+    JOS.attribute("minor", Version.Minor);
+  });
+  JOS.attribute("description", Description);
+  JOS.attributeArray("implied", [&, this] {
+    for (StringRef Ext : ImpliedExtensions)
+      JOS.value(Ext);
+  });
+  JOS.objectEnd();
+
+  return OS;
+}
+raw_ostream &operator<<(raw_ostream &OS, const ExportExtension &Ext) {
+  if (RISCVISAUtils::shouldPrintAsJSON())
+    return Ext.printJSON(OS);
+
+  OS << "Feature Name: '" << Ext.Name << "'\n";
+  OS << "Version: " << Ext.Version.Major << "." << Ext.Version.Minor << "\n";
+  OS << "Description: " << Ext.Description << "\n";
+  if (!Ext.ImpliedExtensions.empty()) {
+    OS << "Implied Extensions:\n";
+    for (StringRef IE : Ext.ImpliedExtensions)
+      OS.indent(2) << "- '" << IE << "'\n";
+  }
+
+  return OS;
+}
+
+raw_ostream &ExportProfile::printJSON(raw_ostream &OS) const {
+  json::OStream JOS(OS, /*IndentSize=*/2);
+  JOS.objectBegin();
+  JOS.attribute("name", Name);
+  JOS.attributeArray("extensions", [&, this] {
+    for (const auto &[ExtName, _] : Extensions)
+      JOS.value(ExtName);
+  });
+  JOS.objectEnd();
+  return OS;
+}
+raw_ostream &operator<<(raw_ostream &OS, const ExportProfile &Profile) {
+  if (RISCVISAUtils::shouldPrintAsJSON())
+    return Profile.printJSON(OS);
+
+  OS << "Profile: '" << Profile.Name << "'\n";
+  OS << "Extensions:\n";
+  for (const auto &[ExtName, Version] : Profile.Extensions)
+    OS.indent(2) << "- '" << ExtName << "' " << Version.Major << "."
+                 << Version.Minor << "\n";
+
+  return OS;
+}
+
 static Error entry() {
-  if (ImpliesExt.getNumOccurrences())
+  if (ImpliesExt.getNumOccurrences()) {
+    if (RISCVISAUtils::shouldPrintAsJSON())
+      return createStringError(inconvertibleErrorCode(),
+                               "--implies cannot be used with --json");
     return printDependencyChain(ExtOrProfileName, ImpliesExt);
+  }
 
   std::string QueryName = StringRef(ExtOrProfileName).lower();
 
@@ -197,18 +278,16 @@ static Error entry() {
     RISCVISAUtils::OrderedExtensionMap ExtensionMap;
     RISCVISAInfo::getSupportedExtensions(ExtensionMap);
 
-    const auto &Version = ExtensionMap.at(QueryName);
-    outs() << "Feature Name: '"
-           << RISCVISAInfo::getTargetFeatureForExtension(QueryName) << "'\n";
-    outs() << "Version: " << Version.Major << "." << Version.Minor << "\n";
-    outs() << "Description: " << getExtDescription(QueryName) << "\n";
-    SmallVector<StringRef, 4> TheImpliedExts;
-    lookupImpliedExtensions(QueryName, TheImpliedExts);
-    if (!TheImpliedExts.empty()) {
-      outs() << "Implied Extensions:\n";
-      for (StringRef IE : TheImpliedExts)
-        outs().indent(2) << "- '" << IE << "'\n";
-    }
+    std::string FeatureName =
+        RISCVISAInfo::getTargetFeatureForExtension(QueryName);
+
+    ExportExtension Ext{FeatureName,
+                        ExtensionMap.at(QueryName),
+                        getExtDescription(QueryName),
+                        {}};
+    lookupImpliedExtensions(QueryName, Ext.ImpliedExtensions);
+
+    outs() << Ext;
     return Error::success();
   }
 
@@ -220,13 +299,11 @@ static Error entry() {
     return createStringError(inconvertibleErrorCode(),
                              "Unrecognized query name '" +
                                  Twine(ExtOrProfileName) + "'");
-  outs() << "Profile: '" << QueryName << "'\n";
-  outs() << "Extensions:\n";
-  const auto &ProfileInfo = ItProfile->getValue();
-  for (const auto &[ExtName, Version] : ProfileInfo->getExtensions())
-    outs().indent(2) << "- '" << ExtName << "' " << Version.Major << "."
-                     << Version.Minor << "\n";
 
+  const auto &ProfileInfo = ItProfile->getValue();
+  ExportProfile Profile{QueryName, ProfileInfo->getExtensions()};
+
+  outs() << Profile;
   return Error::success();
 }
 
